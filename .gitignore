@@ -1,0 +1,25 @@
+# ── Keys & Secrets ────────────────────────────────────────
+*.pem
+*.key
+*.conf
+.env
+.env.*
+config.local.js
+peer-names.json
+
+# ── WireGuard configs (NEVER commit these) ─────────────────
+wg0*
+*.wireguard
+
+# ── Node ──────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# ── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+logs/

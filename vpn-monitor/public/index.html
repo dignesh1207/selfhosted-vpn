@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CloudVPN Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f5;
+  --surface:#ffffff;
+  --surface2:#f8f9fb;
+  --border:#e8eaed;
+  --border2:#dde0e5;
+  --text:#1a1d23;
+  --text2:#6b7280;
+  --text3:#9ca3af;
+  --green:#16a34a;
+  --green-bg:#f0fdf4;
+  --green-border:#bbf7d0;
+  --blue:#2563eb;
+  --blue-bg:#eff6ff;
+  --orange:#ea580c;
+  --orange-bg:#fff7ed;
+  --red:#dc2626;
+  --red-bg:#fef2f2;
+  --purple:#7c3aed;
+  --purple-bg:#f5f3ff;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.04);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:14px}
+
+/* ── Login ── */
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:360px;box-shadow:var(--shadow-md)}
+.login-logo{font-size:32px;margin-bottom:8px}
+.login-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--text2);margin-bottom:28px}
+.login-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;display:block;letter-spacing:.3px}
+.login-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:10px 12px;outline:none;margin-bottom:14px;transition:border-color .2s}
+.login-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.login-btn{width:100%;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;padding:11px;cursor:pointer;transition:background .2s}
+.login-btn:hover{background:#1d4ed8}
+.login-error{font-size:12px;color:var(--red);margin-top:8px;min-height:16px}
+
+/* ── App ── */
+#app{display:none;min-height:100vh}
+
+/* ── Topbar ── */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.topbar-logo{width:28px;height:28px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
+.topbar-title{font-size:15px;font-weight:700;color:var(--text)}
+.topbar-sub{font-size:11px;color:var(--text3);margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.live-pill{display:flex;align-items:center;gap:5px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--green);font-weight:600;letter-spacing:.5px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 1.5s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.logout-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text2);font-size:12px;font-weight:500;padding:6px 14px;cursor:pointer;transition:all .2s}
+.logout-btn:hover{border-color:var(--red);color:var(--red)}
+
+.content{padding:20px 24px;max-width:1400px;margin:0 auto}
+
+/* ── VPN Status Bar ── */
+.vpn-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+.vpn-bar-left{display:flex;align-items:center;gap:12px}
+.vpn-indicator{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .3s}
+.vpn-indicator.on{background:var(--green-bg)}
+.vpn-indicator.off{background:var(--red-bg)}
+.vpn-status-label{font-size:14px;font-weight:600;color:var(--text)}
+.vpn-status-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.vpn-status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.vpn-status-badge.on{background:var(--green-bg);color:var(--green)}
+.vpn-status-badge.off{background:var(--red-bg);color:var(--red)}
+.vpn-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:12px;font-weight:600;padding:8px 20px;cursor:pointer;transition:all .2s}
+.vpn-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.vpn-btn.stop:hover{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* ── Stats Grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow);transition:box-shadow .2s}
+.scard:hover{box-shadow:var(--shadow-md)}
+.scard-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.scard-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.scard-icon.green{background:var(--green-bg)}
+.scard-icon.blue{background:var(--blue-bg)}
+.scard-icon.orange{background:var(--orange-bg)}
+.scard-icon.purple{background:var(--purple-bg)}
+.scard-icon.red{background:var(--red-bg)}
+.scard-trend{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px}
+.scard-trend.up{background:var(--green-bg);color:var(--green)}
+.scard-trend.neutral{background:var(--surface2);color:var(--text3)}
+.scard-value{font-size:22px;font-weight:700;color:var(--text);line-height:1;margin-bottom:4px}
+.scard-label{font-size:11px;color:var(--text2);font-weight:500}
+.scard-sub{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* ── Charts ── */
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.card-sub{font-size:11px;color:var(--text3)}
+.chart-wrap{position:relative;height:200px;margin-bottom:14px}
+.bw-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.bw-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.bw-stat-label{font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.bw-stat-val{font-size:14px;font-weight:700;color:var(--text)}
+
+/* ── Resource Bars ── */
+.res-list{display:flex;flex-direction:column;gap:12px}
+.res-item{display:flex;align-items:center;gap:10px}
+.res-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.res-info{flex:1;min-width:0}
+.res-top{display:flex;justify-content:space-between;margin-bottom:5px}
+.res-name{font-size:11px;font-weight:600;color:var(--text)}
+.res-val{font-size:11px;color:var(--text2)}
+.res-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.res-fill{height:100%;border-radius:3px;transition:width .6s ease}
+
+/* ── Peers Table ── */
+.peers-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+.ptable{width:100%;border-collapse:collapse}
+.ptable th{text-align:left;font-size:11px;font-weight:600;color:var(--text3);padding:0 0 10px;border-bottom:1px solid var(--border);letter-spacing:.3px}
+.ptable td{padding:10px 0;border-bottom:1px solid var(--surface2);font-size:12px;color:var(--text2)}
+.ptable tr:last-child td{border:none}
+.ptable tr:hover td{background:var(--surface2);color:var(--text)}
+.peer-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600}
+.peer-badge.active{background:var(--green-bg);color:var(--green)}
+.peer-badge.idle{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
+.device-name{font-size:12px;font-weight:600;color:var(--text)}
+.edit-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 5px;border-radius:4px;transition:all .2s;margin-left:4px}
+.edit-btn:hover{background:var(--blue-bg);color:var(--blue)}
+.name-input{background:var(--surface2);border:1px solid var(--blue);border-radius:5px;color:var(--text);font-size:11px;padding:3px 7px;outline:none;width:130px}
+.mono{font-family:'Courier New',monospace;font-size:11px}
+
+/* ── Log ── */
+.log-wrap{height:130px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;line-height:1.8}
+.log-wrap::-webkit-scrollbar{width:3px}
+.log-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.log-row{display:flex;gap:10px;padding:1px 0}
+.log-time{color:var(--text3);min-width:75px;font-size:10px}
+.log-msg{color:var(--text2)}
+.log-msg.ok{color:var(--green)}
+.log-msg.warn{color:var(--orange)}
+.log-msg.err{color:var(--red)}
+.log-msg.info{color:var(--blue)}
+
+/* ── Responsive ── */
+@media(max-width:1100px){.stats-grid{grid-template-columns:repeat(3,1fr)}.charts-row{grid-template-columns:1fr}}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">☁️</div>
+    <div class="login-title">CloudVPN Monitor</div>
+    <div class="login-sub">Sign in to access your VPN dashboard</div>
+    <label class="login-label">Password</label>
+    <input class="login-input" type="password" id="loginPass" placeholder="Enter dashboard password"/>
+    <button class="login-btn" id="loginBtn">Sign In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">V</div>
+      <div>
+        <div class="topbar-title">CloudVPN Monitor</div>
+        <div class="topbar-sub">Self-Hosted VPN Dashboard</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-pill"><div class="live-dot"></div>LIVE</div>
+      <button class="logout-btn" id="logoutBtn">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- VPN Bar -->
+    <div class="vpn-bar">
+      <div class="vpn-bar-left">
+        <div class="vpn-indicator" id="vpnIndicator">🔒</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="vpn-status-label" id="vpnLabel">Checking...</span>
+            <span class="vpn-status-badge" id="vpnBadge">—</span>
+          </div>
+          <div class="vpn-status-sub">WireGuard · UDP</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--text3)" id="lastUpdate">—</span>
+        <button class="vpn-btn" id="vpnBtn">—</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="scard">
+        <div class="scard-top">
+          <div class="scard-icon green">👥</div>
+          <span class="scard-trend up" id="scPeersTrend">—</span>
+        </div>
+        <div class="scard-value" id="scPeers">—</div>
+        <div class="scard-label">Active Peers</div>
+        <div class="scard-sub" id="scPeersSub">—</div>
+      </div>
+      <div class="scard">
+        <div class="scard-top">
+          <div class="scard-icon blue">📥</div>
+          <span class="scard-trend neutral">RX</span>
+        </div>
+        <div class="scard-value" id="scRx">—</div>
+        <div class="scard-label">Total Received</div>
+        <div class="scard-sub">from all peers</div>
+      </div>
+      <div class="scard">
+        <div class="scard-top">
+          <div class="scard-icon orange">📤</div>
+          <span class="scard-trend neutral">TX</span>
+        </div>
+        <div class="scard-value" id="scTx">—</div>
+        <div class="scard-label">Total Sent</div>
+        <div class="scard-sub">to all peers</div>
+      </div>
+      <div class="scard">
+        <div class="scard-top">
+          <div class="scard-icon purple">⚡</div>
+          <span class="scard-trend neutral">PEAK</span>
+        </div>
+        <div class="scard-value" id="scPeak">—</div>
+        <div class="scard-label">Peak Download</div>
+        <div class="scard-sub">this session</div>
+      </div>
+      <div class="scard">
+        <div class="scard-top">
+          <div class="scard-icon red">🕐</div>
+          <span class="scard-trend neutral">UP</span>
+        </div>
+        <div class="scard-value" id="scUptime" style="font-size:13px;padding-top:4px">—</div>
+        <div class="scard-label">Server Uptime</div>
+        <div class="scard-sub" id="scLoad">—</div>
+      </div>
+    </div>
+
+    <!-- Bandwidth Chart -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          📊 Network Bandwidth
+          <span style="font-size:11px;font-weight:400;color:var(--text3)">Real-time KB/s</span>
+        </div>
+        <div style="display:flex;gap:16px;font-size:11px;color:var(--text2)">
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#16a34a;border-radius:2px;display:inline-block"></span>Download</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#2563eb;border-radius:2px;display:inline-block"></span>Upload</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="bwChart"></canvas></div>
+      <div class="bw-stats">
+        <div class="bw-stat"><div class="bw-stat-label">Current ↓</div><div class="bw-stat-val" id="bwCurRx" style="color:var(--green)">—</div></div>
+        <div class="bw-stat"><div class="bw-stat-label">Current ↑</div><div class="bw-stat-val" id="bwCurTx" style="color:var(--blue)">—</div></div>
+        <div class="bw-stat"><div class="bw-stat-label">Peak ↓</div><div class="bw-stat-val" id="bwPeakRx" style="color:var(--orange)">—</div></div>
+        <div class="bw-stat"><div class="bw-stat-label">Peak ↑</div><div class="bw-stat-val" id="bwPeakTx" style="color:var(--orange)">—</div></div>
+      </div>
+    </div>
+
+    <!-- Server Resources -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Server Resources</div>
+        <span class="card-sub" id="resUpdated">—</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="res-list">
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--red-bg)">🔥</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">CPU Usage</span><span class="res-val" id="rCpuVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rCpu" style="width:0%;background:#dc2626"></div></div>
+            </div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--blue-bg)">🧠</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">Memory</span><span class="res-val" id="rMemVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rMem" style="width:0%;background:#2563eb"></div></div>
+            </div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--orange-bg)">💾</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">Disk</span><span class="res-val" id="rDiskVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rDisk" style="width:0%;background:#ea580c"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="res-list">
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--green-bg)">🌐</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">Net Total ↓</span><span class="res-val" id="rNetRxVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rNetRx" style="width:0%;background:#16a34a"></div></div>
+            </div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--purple-bg)">📡</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">Net Total ↑</span><span class="res-val" id="rNetTxVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rNetTx" style="width:0%;background:#7c3aed"></div></div>
+            </div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon" style="background:var(--surface2)">📊</div>
+            <div class="res-info">
+              <div class="res-top"><span class="res-name">Load Average</span><span class="res-val" id="rLoadVal">—</span></div>
+              <div class="res-bar"><div class="res-fill" id="rLoad" style="width:0%;background:#6b7280"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Peers -->
+    <div class="peers-card">
+      <div class="card-header">
+        <div class="card-title">🔗 Connected Peers</div>
+        <span class="card-sub" id="peerUpdated">—</span>
+      </div>
+      <table class="ptable">
+        <thead>
+          <tr>
+            <th>STATUS</th>
+            <th>DEVICE NAME</th>
+            <th>PUBLIC KEY</th>
+            <th>ENDPOINT</th>
+            <th>LAST HANDSHAKE</th>
+            <th>↓ RECEIVED</th>
+            <th>↑ SENT</th>
+          </tr>
+        </thead>
+        <tbody id="peersBody">
+          <tr><td colspan="7" style="color:var(--text3);padding:20px 0;text-align:center">Loading peers...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card">
+      <div class="card-header" style="margin-bottom:10px">
+        <div class="card-title">📋 Event Log</div>
+        <button onclick="document.getElementById('logBody').innerHTML=''" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;padding:4px 10px;cursor:pointer">Clear</button>
+      </div>
+      <div class="log-wrap" id="logBody"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let token = sessionStorage.getItem('vpn_token');
+let socket = null;
+let vpnIsOn = false;
+let bwChart = null;
+const bwLabels = Array(40).fill('');
+const bwRxData = Array(40).fill(null);
+const bwTxData = Array(40).fill(null);
+
+function fmt(b){if(!b||b===0)return'0 B';const k=1024,s=['B','KB','MB','GB','TB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+s[i];}
+function fmtBw(kbps){if(!kbps||kbps<0.1)return'0 KB/s';if(kbps<1024)return kbps.toFixed(1)+' KB/s';return(kbps/1024).toFixed(2)+' MB/s';}
+
+function log(msg,type=''){
+  const el=document.getElementById('logBody');
+  const d=document.createElement('div');
+  d.className='log-row';
+  d.innerHTML=`<span class="log-time">${new Date().toLocaleTimeString()}</span><span class="log-msg ${type}">${msg}</span>`;
+  el.insertBefore(d,el.firstChild);
+  if(el.children.length>100)el.removeChild(el.lastChild);
+}
+
+function initChart(){
+  const ctx=document.getElementById('bwChart').getContext('2d');
+  bwChart=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:bwLabels,
+      datasets:[
+        {label:'Download',data:bwRxData,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.06)',borderWidth:2,pointRadius:0,tension:0.4,fill:true,spanGaps:false},
+        {label:'Upload',data:bwTxData,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.04)',borderWidth:2,pointRadius:0,tension:0.4,fill:true,spanGaps:false}
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      animation:{duration:150},
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'#fff',titleColor:'#1a1d23',bodyColor:'#6b7280',borderColor:'#e8eaed',borderWidth:1,padding:10,callbacks:{label:(c)=>` ${c.dataset.label}: ${fmtBw(c.parsed.y)}`}}},
+      scales:{
+        x:{ticks:{color:'#9ca3af',font:{size:9},maxTicksLimit:8},grid:{color:'#f0f2f5',drawBorder:false}},
+        y:{
+          ticks:{color:'#9ca3af',font:{size:9},callback:(v)=>fmtBw(v)},
+          grid:{color:'#f0f2f5',drawBorder:false},
+          // AUTO SCALE — this is the fix for the chart not showing high values
+          beginAtZero:true,
+          suggestedMax:10
+        }
+      }
+    }
+  });
+}
+
+async function login(){
+  const pass=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginError');
+  err.textContent='';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
+    const data=await r.json();
+    if(!r.ok){err.textContent=data.error||'Login failed';return;}
+    token=data.token;
+    sessionStorage.setItem('vpn_token',token);
+    showApp();
+  }catch(e){err.textContent='Connection error';}
+}
+
+async function logout(){
+  try{await fetch('/api/logout',{method:'POST',headers:{'x-session-token':token}});}catch(e){}
+  sessionStorage.removeItem('vpn_token');
+  token=null;
+  if(socket)socket.disconnect();
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginPass').value='';
+}
+
+function showApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  initChart();
+  connectSocket();
+  log('Dashboard authenticated','ok');
+}
+
+function connectSocket(){
+  socket=io({auth:{token}});
+  socket.on('connect',()=>log('Real-time feed connected','ok'));
+  socket.on('disconnect',()=>log('Real-time feed disconnected','warn'));
+  socket.on('connect_error',()=>{log('Auth failed — please refresh','err');logout();});
+  socket.on('stats',updateUI);
+}
+
+async function toggleVPN(){
+  const btn=document.getElementById('vpnBtn');
+  btn.disabled=true;btn.textContent='...';
+  try{
+    const r=await fetch(vpnIsOn?'/api/vpn/off':'/api/vpn/on',{method:'POST',headers:{'x-session-token':token}});
+    const d=await r.json();
+    log('WireGuard '+(d.status==='on'?'started ✓':'stopped'),'d.status==='on'?'ok':'warn');
+  }catch(e){log('Toggle failed: '+e.message,'err');}
+  btn.disabled=false;
+}
+
+async function savePeerName(ip,name){
+  try{
+    await fetch('/api/peer-name',{method:'POST',headers:{'Content-Type':'application/json','x-session-token':token},body:JSON.stringify({ip,name})});
+    log('Device renamed to: '+name,'info');
+  }catch(e){log('Rename failed','err');}
+}
+
+function makeNameCell(peer){
+  const wrap=document.createElement('div');
+  wrap.style.cssText='display:flex;align-items:center;gap:2px';
+  const span=document.createElement('span');
+  span.className='device-name';
+  span.textContent=peer.name;
+  const btn=document.createElement('button');
+  btn.className='edit-btn';btn.textContent='✏️';btn.title='Rename';
+  btn.onclick=()=>{
+    const inp=document.createElement('input');
+    inp.className='name-input';inp.value=peer.name;
+    wrap.innerHTML='';wrap.appendChild(inp);inp.focus();
+    inp.onblur=async()=>{
+      const n=inp.value.trim()||peer.name;
+      await savePeerName(peer.ip,n);
+      peer.name=n;span.textContent=n;
+      wrap.innerHTML='';wrap.appendChild(span);wrap.appendChild(btn);
+    };
+    inp.onkeydown=(e)=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){wrap.innerHTML='';wrap.appendChild(span);wrap.appendChild(btn);}};
+  };
+  wrap.appendChild(span);wrap.appendChild(btn);
+  return wrap;
+}
+
+function setBar(fillId,valId,pct,label){
+  document.getElementById(fillId).style.width=Math.min(pct,100)+'%';
+  document.getElementById(valId).textContent=label;
+}
+
+function updateUI(data){
+  const{wg,system,network,totalDataUsed,peakBandwidth}=data;
+
+  // VPN status
+  vpnIsOn=wg.status==='on';
+  const ind=document.getElementById('vpnIndicator');
+  const lbl=document.getElementById('vpnLabel');
+  const badge=document.getElementById('vpnBadge');
+  const btn=document.getElementById('vpnBtn');
+  ind.className='vpn-indicator '+(vpnIsOn?'on':'off');
+  ind.textContent=vpnIsOn?'🔒':'🔓';
+  lbl.textContent=vpnIsOn?'WireGuard Active':'WireGuard Stopped';
+  badge.textContent=vpnIsOn?'● Running':'● Stopped';
+  badge.className='vpn-status-badge '+(vpnIsOn?'on':'off');
+  btn.textContent=vpnIsOn?'Stop VPN':'Start VPN';
+  btn.className='vpn-btn '+(vpnIsOn?'stop':'');
+  document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString();
+
+  // Stats
+  const activePeers=wg.peers.filter(p=>p.isActive).length;
+  document.getElementById('scPeers').textContent=activePeers;
+  document.getElementById('scPeersSub').textContent=wg.peers.length+' total configured';
+  document.getElementById('scPeersTrend').textContent=activePeers>0?activePeers+' online':'offline';
+  document.getElementById('scPeersTrend').className='scard-trend '+(activePeers>0?'up':'neutral');
+  document.getElementById('scRx').textContent=fmt(totalDataUsed.rx);
+  document.getElementById('scTx').textContent=fmt(totalDataUsed.tx);
+  document.getElementById('scPeak').textContent=fmtBw(Math.round(peakBandwidth.rx/1024));
+  document.getElementById('scUptime').textContent=system.uptime||'—';
+  document.getElementById('scLoad').textContent='load avg: '+(system.loadAvg||'—');
+
+  // Bandwidth chart — KEY FIX: use actual KB/s values, chart auto-scales
+  const bw=network.bandwidth||{rx:0,tx:0};
+  const rxKb=Math.round(bw.rx/1024*10)/10;
+  const txKb=Math.round(bw.tx/1024*10)/10;
+  bwRxData.shift();bwRxData.push(rxKb);
+  bwTxData.shift();bwTxData.push(txKb);
+  bwLabels.shift();bwLabels.push(new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+  if(bwChart){
+    // Remove suggestedMax so chart auto-scales to actual data
+    const maxVal=Math.max(...bwRxData.filter(v=>v!==null),...bwTxData.filter(v=>v!==null),1);
+    bwChart.options.scales.y.suggestedMax=maxVal*1.2;
+    bwChart.update('none');
+  }
+  document.getElementById('bwCurRx').textContent=fmtBw(rxKb);
+  document.getElementById('bwCurTx').textContent=fmtBw(txKb);
+  document.getElementById('bwPeakRx').textContent=fmtBw(Math.round(peakBandwidth.rx/1024));
+  document.getElementById('bwPeakTx').textContent=fmtBw(Math.round(peakBandwidth.tx/1024));
+
+  // Resources
+  setBar('rCpu','rCpuVal',system.cpuPercent,system.cpuPercent.toFixed(1)+'%');
+  setBar('rMem','rMemVal',system.memPercent,system.memUsed+'/'+system.memTotal+' MB');
+  setBar('rDisk','rDiskVal',system.diskPercent,system.diskPercent+'%');
+  const netRxPct=Math.min((network.ens5?.rxBytes||0)/(1024*1024*1024)*10,100);
+  const netTxPct=Math.min((network.ens5?.txBytes||0)/(1024*1024*1024)*10,100);
+  setBar('rNetRx','rNetRxVal',netRxPct,fmt(network.ens5?.rxBytes||0));
+  setBar('rNetTx','rNetTxVal',netTxPct,fmt(network.ens5?.txBytes||0));
+  const load1=parseFloat((system.loadAvg||'0').split(' ')[0])||0;
+  setBar('rLoad','rLoadVal',load1*50,system.loadAvg||'—');
+  document.getElementById('resUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+
+  // Peers
+  document.getElementById('peerUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+  const tbody=document.getElementById('peersBody');
+  if(!wg.peers.length){
+    tbody.innerHTML='<tr><td colspan="7" style="color:var(--text3);padding:24px 0;text-align:center;font-size:13px">No peers configured</td></tr>';
+    return;
+  }
+  tbody.innerHTML='';
+  wg.peers.forEach(peer=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span class="peer-badge ${peer.isActive?'active':'idle'}">${peer.isActive?'● Active':'○ Idle'}</span></td>
+      <td></td>
+      <td><span class="mono">${peer.publicKey}</span></td>
+      <td><span class="mono" style="color:${peer.endpoint!=='—'?'var(--text)':'var(--text3)'}">${peer.endpoint}</span></td>
+      <td style="color:${peer.isActive?'var(--green)':'var(--text3)'}">${peer.lastHandshake}${peer.secondsAgo?` <span style="color:var(--text3);font-size:10px">(${peer.secondsAgo}s ago)</span>`:''}</td>
+      <td style="color:var(--blue);font-weight:600">${fmt(peer.rxBytes)}</td>
+      <td style="color:var(--green);font-weight:600">${fmt(peer.txBytes)}</td>`;
+    tr.cells[1].appendChild(makeNameCell(peer));
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('loginBtn').addEventListener('click',login);
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+document.getElementById('logoutBtn').addEventListener('click',logout);
+document.getElementById('vpnBtn').addEventListener('click',toggleVPN);
+
+if(token){
+  fetch('/api/stats',{headers:{'x-session-token':token}})
+    .then(r=>r.ok?showApp():logout())
+    .catch(()=>logout());
+}
+</script>
+</body>
+</html>

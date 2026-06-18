@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "CloudVPN",
+  "version": "2.0",
+  "description": "Self-hosted VPN controller for Chrome — connect to any AWS region",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "proxy",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
