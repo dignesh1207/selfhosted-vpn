@@ -1,278 +1,267 @@
-# ☁️ CloudVPN — Self-Hosted VPN on AWS
+# ☁️ CloudVPN — Self-Hosted Multi-Location VPN
 
-A free, self-hosted VPN using AWS EC2, WireGuard, a Chrome extension, and a real-time monitoring dashboard. Works with **any AWS region** — India, Canada, UK, US, Singapore, and more.
+A completely free, self-hosted VPN built on AWS EC2 and Google Cloud using WireGuard, with a professional control center dashboard, Chrome extension, and Pi-hole ad blocking.
 
-![AWS](https://img.shields.io/badge/AWS-EC2-orange)
-![WireGuard](https://img.shields.io/badge/VPN-WireGuard-blue)
-![Chrome](https://img.shields.io/badge/Chrome-Extension-green)
-![Free](https://img.shields.io/badge/Cost-Free%2012mo-brightgreen)
+![Stars](https://img.shields.io/github/stars/dignesh1207/selfhosted-vpn?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![WireGuard](https://img.shields.io/badge/VPN-WireGuard-purple?style=flat-square)
+![Pi-hole](https://img.shields.io/badge/DNS-Pi--hole-red?style=flat-square)
 
 ---
 
-## ⚠️ Security — Read Before Pushing to GitHub
+## ✨ Features
 
-**NEVER commit these files:**
-- `*.pem` — SSH private key
-- `*.conf` — WireGuard config files
-- `.env` — environment variables with secrets
-- `peer-names.json` — contains your device IPs
+- **WireGuard VPN** — ChaCha20 encryption, faster than OpenVPN
+- **Multi-location** — India (AWS Mumbai) + Canada (GCP Montreal)
+- **Control Center Dashboard** — real-time server monitoring, start/stop control, bandwidth charts
+- **Chrome Extension** — one-click location switcher for browser VPN
+- **Pi-hole DNS Blocking** — 554,000+ ad/malware domains blocked
+- **Security hardened** — UFW firewall, Fail2Ban, SSH key-only, auto-updates
+- **Device management** — rename and track all connected devices
+- **Completely free** — Canada server free forever, India free 12 months
 
-**Always use `.env` for secrets:**
+---
+
+## 🏗️ Architecture
+
+```
+Your Device (Mac/iPhone/Android)
+       │
+       ├── WireGuard App → Encrypted tunnel → VPN Server → Internet
+       │
+       └── Chrome Extension → SSH Tunnel (SOCKS5) → VPN Server → Internet
+
+VPN Servers:
+┌─────────────────────┐    ┌─────────────────────┐
+│  AWS EC2 Mumbai     │    │  GCP Montreal        │
+│  WireGuard :55804   │    │  WireGuard :54855    │
+│  VPN API    :3000   │    │  VPN API    :3000    │
+│  Monitor    :4000   │    │  Dashboard  :47823   │
+│  Pi-hole    :53/80  │    │  Pi-hole    :53/80   │
+└─────────────────────┘    └─────────────────────┘
+```
+
+---
+
+## 🚀 Quick Start
+
+### Step 1 — Launch Cloud Servers
+
+**India (AWS EC2):**
+- Region: ap-south-1 (Mumbai)
+- Instance: t3.micro (free tier)
+- OS: Ubuntu 22.04+ LTS
+
+**Canada (Google Cloud):**
+- Region: northamerica-northeast1 (Montreal)
+- Machine: e2-micro (always free)
+- OS: Ubuntu 22.04 LTS
+
+### Step 2 — Install WireGuard
+
+Run on each server:
 ```bash
-cp .env.example .env
-# Edit .env with your actual values
-```
-
----
-
-## 🌍 Supported AWS Regions
-
-| Location | Region Code |
-|---|---|
-| 🇮🇳 Mumbai, India | ap-south-1 |
-| 🇨🇦 Montreal, Canada | ca-central-1 |
-| 🇬🇧 London, UK | eu-west-2 |
-| 🇺🇸 New York, US | us-east-1 |
-| 🇸🇬 Singapore | ap-southeast-1 |
-| 🇩🇪 Frankfurt, Germany | eu-central-1 |
-| 🇦🇺 Sydney, Australia | ap-southeast-2 |
-
----
-
-## 🏗️ Project Structure
-
-```
-selfhosted-vpn/
-├── chrome-extension/        # Chrome extension
-│   ├── manifest.json
-│   ├── popup.html
-│   ├── popup.js
-│   └── background.js
-├── vpn-monitor/             # Server-side code
-│   ├── monitor.js           # Dashboard server (port 4000)
-│   ├── vpn-api.js           # VPN control API (port 3000)
-│   └── public/
-│       └── index.html       # Dashboard UI
-├── scripts/
-│   ├── setup.sh             # EC2 setup script
-│   ├── start-vpn.sh         # Mac: start SSH tunnel
-│   └── stop-vpn.sh          # Mac: stop SSH tunnel
-├── .env.example             # Environment variable template
-├── .gitignore               # Protects sensitive files
-└── README.md
-```
-
----
-
-## 🚀 Setup Guide
-
-### Step 1 — Launch EC2 Instance
-
-1. Go to [AWS Console](https://console.aws.amazon.com)
-2. Switch to your preferred region (e.g. ap-south-1 for India)
-3. Launch EC2 instance:
-   - AMI: **Ubuntu 22.04+ LTS** (free tier eligible)
-   - Type: **t3.micro** (free tier eligible)
-   - Create key pair → download `.pem` file
-4. Security group inbound rules:
-
-| Port | Protocol | Purpose |
-|---|---|---|
-| 22 | TCP | SSH |
-| 3000 | TCP | VPN API |
-| 4000 | TCP | Monitor Dashboard |
-| 8888 | TCP | SOCKS5 Proxy |
-| 51820 | UDP | WireGuard (default) |
-
-5. Assign an **Elastic IP** so your server IP never changes
-
-### Step 2 — Install WireGuard on Server
-
-```bash
-ssh -i ~/Downloads/YOUR-KEY.pem ubuntu@YOUR_SERVER_IP
-
-sudo apt update
 curl -O https://raw.githubusercontent.com/angristan/wireguard-install/master/wireguard-install.sh
 chmod +x wireguard-install.sh
 sudo ./wireguard-install.sh
-# Enter your PUBLIC IP when asked
-# Press Enter for all other defaults
-# Name your first client e.g. "mylaptop"
 ```
 
-### Step 3 — Enable IP Forwarding
+### Step 3 — Security Hardening
 
 ```bash
-sudo sysctl -w net.ipv4.ip_forward=1
-echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.conf
-sudo iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
-sudo iptables -A FORWARD -i wg0 -j ACCEPT
-sudo iptables -A FORWARD -o wg0 -j ACCEPT
-sudo apt install iptables-persistent -y
-sudo netfilter-persistent save
+bash scripts/setup-security.sh YOUR_WG_PORT
 ```
 
-### Step 4 — Install Dante SOCKS5 Proxy
+### Step 4 — Install Pi-hole (Ad Blocking)
 
 ```bash
-sudo apt install dante-server -y
-sudo bash -c 'cat > /etc/danted.conf << DEOF
-logoutput: syslog
-internal: 0.0.0.0 port = 8888
-external: ens5
-clientmethod: none
-socksmethod: none
-
-client pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-}
-
-socks pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-}
-DEOF'
-sudo systemctl restart danted
-sudo systemctl enable danted
+sudo systemctl stop wg-quick@wg0
+curl -sSL https://install.pi-hole.net | bash
+sudo systemctl start wg-quick@wg0
 ```
 
-### Step 5 — Deploy VPN API and Monitor
+Point WireGuard DNS at Pi-hole:
+```bash
+sudo sed -i 's/DNS = .*/DNS = 10.66.66.1/' /etc/wireguard/wg0.conf
+sudo systemctl restart wg-quick@wg0
+```
+
+### Step 5 — Deploy Control Center Dashboard
 
 ```bash
-# Create .env
-cat > ~/.env << ENVEOF
-API_KEY=your-secret-key-here
-DASHBOARD_PASSWORD=your-dashboard-password
-ENVEOF
-
-# VPN API
-mkdir ~/vpn-api && cd ~/vpn-api
-# Upload vpn-api.js here as server.js
-npm init -y && npm install express dotenv
-cp ~/.env .env
-
-# Monitor
-mkdir -p ~/vpn-monitor/public && cd ~/vpn-monitor
-# Upload monitor.js and public/index.html
-npm init -y && npm install express socket.io dotenv
-cp ~/.env .env
-
-# Start with PM2
-sudo npm install -g pm2
-pm2 start ~/vpn-api/server.js --name vpn-api
-pm2 start ~/vpn-monitor/monitor.js --name vpn-monitor
-pm2 startup && pm2 save
+mkdir -p ~/vpn-dashboard/public
+cd ~/vpn-dashboard
+# Upload unified-monitor.js from dashboard/ folder
+# Upload index.html from dashboard/public/ folder
+cp servers.json.example servers.json
+# Edit servers.json with your server IPs and API keys
+nano servers.json
+cp .env.example .env
+nano .env  # Set your dashboard password
+npm install express socket.io node-fetch@2 dotenv
+pm2 start unified-monitor.js --name control-center
+pm2 save
 ```
 
-### Step 6 — Load Chrome Extension
+### Step 6 — Install Chrome Extension
 
 1. Open Chrome → `chrome://extensions`
 2. Enable **Developer Mode**
 3. Click **Load unpacked** → select `chrome-extension/` folder
-4. Click extension icon → enter your server details:
-   - Server IP: your EC2 public IP
-   - API Port: 3000
-   - API Key: your API key from `.env`
-   - Proxy Port: 8888
-
-### Step 7 — Access Dashboard
-
-Open: `http://YOUR_SERVER_IP:4000`
+4. Configure server IPs in extension settings
 
 ---
 
-## 💻 Daily Usage
+## 📊 Dashboard
 
-### Chrome VPN (browser only)
+The control center runs on port 47823 and includes:
 
-**Start:**
-```bash
-./scripts/start-vpn.sh
-```
-Then click the power orb in the Chrome extension.
-
-**Stop:**
-```bash
-./scripts/stop-vpn.sh
-```
-
-### Full Device VPN (WireGuard app)
-- Download **WireGuard** from Mac App Store / iOS / Android
-- Import your `.conf` file or scan QR code
-- Toggle Activate
-
----
-
-## 📊 Dashboard Features
-
-- 🔒 Password protected with rate limiting
-- 📊 Real-time bandwidth chart
-- 👥 Connected peers with editable device names
-- ⚡ Server CPU, memory, disk usage
-- 🔄 WireGuard start/stop button
-- 📋 Live event log
-
----
-
-## 🆓 AWS Free Tier
-
-| Resource | Free Allowance |
+| Section | Features |
 |---|---|
-| EC2 t3.micro | 750 hrs/month (12 months) |
-| Outbound data | 100 GB/month |
-| Inbound data | Unlimited |
+| Dashboard | Server status, active peers, total traffic, overview |
+| Servers | Start/Stop control, CPU/RAM/disk, bandwidth sparklines |
+| Devices | All connected devices with rename, data usage, status |
+| Bandwidth | Live chart, usage vs free tier limits |
+| Ad Blocking | Pi-hole stats, blocked/allowed domains |
+| Security | Failed logins, banned IPs, security checklist |
+| Event Log | Real-time event stream |
 
-**After 12 months:** ~$8-10/month per server
+**Accessing the dashboard:**
+```
+http://YOUR_SERVER_IP:47823
+```
+
+For HTTPS, use Cloudflare Tunnel:
+```bash
+cloudflared tunnel --url http://localhost:47823
+```
 
 ---
 
 ## 🔒 Security
 
-- WireGuard encryption (state-of-the-art)
-- API key authentication
-- Dashboard login with session tokens
-- Rate limiting (5 attempts → 15 min lockout)
-- All secrets in `.env` (never in code)
+| Feature | Implementation |
+|---|---|
+| VPN encryption | WireGuard ChaCha20 + Curve25519 |
+| DNS leak protection | Pi-hole + Cloudflare DNSSEC |
+| Firewall | UFW — default deny, only needed ports open |
+| Brute force protection | Fail2Ban — permanent bans after 3 attempts |
+| SSH hardening | Key-only auth, root login disabled, UseDNS no |
+| Auto updates | unattended-upgrades enabled |
+| Ad/malware blocking | Pi-hole with 554K+ domain blocklist |
+| Dashboard auth | Rate-limited, session tokens, IP restricted |
+
+---
+
+## 💻 Chrome Extension
+
+The Chrome extension (Manifest V3) lets you switch VPN locations with one click.
+
+**Setup:**
+```bash
+# Start SSH tunnels on your Mac
+bash scripts/start-tunnels.sh
+
+# Stop tunnels
+bash scripts/stop-tunnels.sh
+```
+
+---
+
+## 📱 Mobile Setup (WireGuard App)
+
+1. Install **WireGuard** from App Store / Play Store
+2. On server: `sudo ./wireguard-install.sh` → Add new client
+3. Show QR: `qrencode -t ansiutf8 < ~/wg0-client-NAME.conf`
+4. Scan QR in WireGuard app
+
+**Important:** Make sure client config has:
+```
+DNS = 10.66.66.1
+Endpoint = YOUR_PUBLIC_IP:WG_PORT
+```
+
+---
+
+## 💰 Cost
+
+| Resource | Cost |
+|---|---|
+| Canada (GCP e2-micro) | **Free forever** |
+| India (AWS t3.micro) | **Free 12 months**, ~$9/mo after |
+| Pi-hole | Free (open source) |
+| WireGuard | Free (open source) |
 
 ---
 
 ## 🛠️ Useful Commands
 
 ```bash
-# Check WireGuard status
-sudo systemctl status wg-quick@wg0
-sudo wg show
+# WireGuard
+sudo wg show                        # Show connected peers
+sudo systemctl start wg-quick@wg0   # Start VPN
+sudo systemctl stop wg-quick@wg0    # Stop VPN
+sudo ./wireguard-install.sh         # Add new client
 
-# PM2 process manager
-pm2 list
-pm2 logs vpn-api
-pm2 logs vpn-monitor
-pm2 restart all
+# PM2
+pm2 list                            # Show running services
+pm2 logs control-center             # View dashboard logs
+pm2 restart control-center          # Restart dashboard
 
-# Add new VPN client
-sudo ./wireguard-install.sh
+# Pi-hole
+sudo pihole status                  # Check if blocking is enabled
+sudo pihole enable                  # Enable blocking
+sudo pihole -g                      # Update blocklists
+
+# Security
+sudo ufw status                     # Firewall status
+sudo fail2ban-client status sshd    # Fail2Ban status
+grep "Failed password" /var/log/auth.log | wc -l  # Hack attempts
+
+# Find Cloudflare tunnel URL
+cat ~/.pm2/logs/cloudflared-error.log | grep trycloudflare | tail -1
 ```
 
 ---
 
-## 🏛️ Architecture
+## 📁 Project Structure
 
 ```
-Your Device
-     │
-     ├── Chrome Extension + SSH Tunnel (:8888)
-     │        └── Routes Chrome traffic through VPN server
-     │
-     └── WireGuard App
-              └── Routes ALL device traffic through VPN server
-                       │
-                  AWS EC2 (your chosen region)
-                  ├── WireGuard Server
-                  ├── VPN API (:3000)
-                  ├── Monitor Dashboard (:4000)
-                  └── Dante SOCKS5 (:8888)
-                       │
-                  Internet (server's IP and location)
+cloudvpn/
+├── chrome-extension/       # Chrome Manifest V3 extension
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   └── background.js
+├── dashboard/              # Control center dashboard
+│   ├── unified-monitor.js  # Backend (Node.js + Socket.io)
+│   ├── public/
+│   │   └── index.html      # Frontend (vanilla JS)
+│   ├── servers.json.example
+│   └── .env.example
+├── scripts/                # Setup and utility scripts
+│   ├── setup-server.sh     # Fresh server setup
+│   ├── setup-security.sh   # Security hardening
+│   ├── start-tunnels.sh    # Start SSH tunnels (Mac)
+│   └── stop-tunnels.sh     # Stop SSH tunnels (Mac)
+├── docs/                   # Detailed documentation
+│   ├── PIHOLE.md
+│   └── SECURITY.md
+├── .gitignore
+└── README.md
 ```
+
+---
+
+## ⚠️ Security Warning
+
+**NEVER commit these files to GitHub:**
+- `*.pem` — SSH private keys
+- `*.conf` — WireGuard client configs (contain private keys)
+- `.env` — Dashboard password
+- `peer-names.json` — Device names and IPs
+
+These are all in `.gitignore` by default.
 
 ---
 
@@ -282,12 +271,4 @@ MIT — free for personal use.
 
 ---
 
-## 🔐 DNS Leak Protection
-
-Add this to your WireGuard client config (`[Interface]` section) on each device:
-
-```
-DNS = 1.1.1.1, 1.0.0.1
-```
-
-This forces all DNS queries through Cloudflare instead of your ISP, preventing DNS leaks. Test at [dnsleaktest.com](https://dnsleaktest.com) — should show only Cloudflare servers.
+Built by [Dignesh Solanki](https://github.com/dignesh1207) · University of Windsor · 2026
