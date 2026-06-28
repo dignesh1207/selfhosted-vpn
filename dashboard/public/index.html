@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CloudVPN — Control Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --bg0:#0a0a0c;--bg1:#111115;--bg2:#18181e;--bg3:#1f1f27;--bg4:#26262f;
+  --accent:#6366f1;--accent-dim:rgba(99,102,241,0.15);--accent-border:rgba(99,102,241,0.3);
+  --text0:#ffffff;--text1:#e4e4f0;--text2:#9898b8;--text3:#55556a;--text4:#35354a;
+  --green:#22c55e;--green-dim:rgba(34,197,94,0.1);
+  --red:#ef4444;--red-dim:rgba(239,68,68,0.1);
+  --amber:#f59e0b;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --r:8px;--r2:12px;--r3:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg0);color:var(--text1);font-family:'Inter',system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+input,button{font-family:inherit;font-size:inherit}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg0)}
+.lbox{width:360px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--r3);padding:36px;box-shadow:0 32px 64px rgba(0,0,0,0.5)}
+.lhead{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.licon{width:40px;height:40px;background:var(--accent);border-radius:var(--r);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.licon svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lname{font-size:16px;font-weight:700;color:var(--text0)}
+.lsub{font-size:11px;color:var(--text3);margin-top:1px;text-transform:uppercase;letter-spacing:.3px}
+.llabel{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px}
+.linput{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--text0);padding:10px 12px;outline:none;transition:border-color .15s;font-family:'JetBrains Mono',monospace;font-size:13px;margin-bottom:14px}
+.linput:focus{border-color:var(--accent)}
+.lbtn{width:100%;background:var(--accent);border:none;border-radius:var(--r);color:#fff;padding:11px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.lbtn:hover{opacity:.9}
+.lerr{font-size:12px;color:var(--red);margin-top:10px;min-height:16px;text-align:center}
+
+#app{display:none;height:100vh;flex-direction:column}
+.topbar{height:52px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0}
+.tb-brand{display:flex;align-items:center;gap:10px}
+.tb-icon{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.tb-icon svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.tb-name{font-size:14px;font-weight:700;color:var(--text0)}
+.tb-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.tb-sub{font-size:11px;color:var(--text3)}
+.tb-right{display:flex;align-items:center;gap:10px}
+.tb-live{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--green);background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:20px;padding:4px 10px}
+.tb-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tb-clock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:5px 10px}
+.tb-btn{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--text2);padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s}
+.tb-btn:hover{border-color:var(--red);color:var(--red)}
+
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:200px;background:var(--bg1);border-right:1px solid var(--border);flex-shrink:0;overflow-y:auto}
+.sb-sec{padding:12px 8px}
+.sb-lbl{font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin-bottom:4px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);cursor:pointer;color:var(--text2);font-weight:500;font-size:12px;border:1px solid transparent;transition:all .15s;user-select:none}
+.sb-item:hover{background:var(--bg2);color:var(--text1)}
+.sb-item.active{background:var(--accent-dim);color:var(--text0);border-color:var(--accent-border)}
+.sb-item svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.sb-badge{margin-left:auto;font-size:10px;font-weight:600;background:var(--bg3);padding:2px 6px;border-radius:10px;color:var(--text3)}
+.sb-item.active .sb-badge{background:var(--accent-dim);color:var(--accent)}
+.sb-div{height:1px;background:var(--border);margin:4px 8px}
+
+.content{flex:1;overflow-y:auto;padding:20px;background:var(--bg0)}
+.page{display:none}.page.active{display:block}
+
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r2);padding:18px;margin-bottom:14px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:12px;font-weight:600;color:var(--text1);display:flex;align-items:center;gap:7px}
+.card-title svg{width:13px;height:13px;stroke:var(--text3);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.card-sub{font-size:11px;color:var(--text3)}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:14px}
+
+.stat{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px}
+.stat-lbl{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.stat-val{font-size:24px;font-weight:700;color:var(--text0);font-family:'JetBrains Mono',monospace;letter-spacing:-1px;line-height:1}
+.stat-foot{font-size:11px;color:var(--text3);margin-top:5px}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.bdot{width:5px;height:5px;border-radius:50%}
+.badge.on{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,0.2)}
+.badge.on .bdot{background:var(--green);animation:blink 2s infinite}
+.badge.off{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.15)}
+.badge.off .bdot{background:var(--red)}
+.badge.unk{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+.badge.unk .bdot{background:var(--text3)}
+
+.srv{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r2);padding:18px;transition:border-color .15s}
+.srv:hover{border-color:var(--border2)}
+.srv-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.srv-flag{width:40px;height:40px;border-radius:var(--r);background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.srv-name{font-size:14px;font-weight:600;color:var(--text0)}
+.srv-meta{font-size:11px;color:var(--text3);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.srv-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.sm{background:var(--bg2);border-radius:var(--r);padding:10px 12px}
+.sm-lbl{font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.sm-val{font-size:14px;font-weight:600;color:var(--text0);font-family:'JetBrains Mono',monospace}
+
+.res-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.res-row{display:flex;align-items:center;gap:8px}
+.res-lbl{font-size:11px;color:var(--text3);min-width:32px}
+.res-track{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.res-fill{height:100%;border-radius:2px;transition:width .5s}
+.res-val{font-size:11px;color:var(--text2);min-width:38px;text-align:right;font-family:'JetBrains Mono',monospace}
+
+.btn{border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}.btn-p:hover{opacity:.9}
+.btn-d{background:var(--red-dim);border-color:rgba(239,68,68,0.3);color:var(--red)}.btn-d:hover{background:rgba(239,68,68,0.18)}
+.btn-g{background:var(--bg2);color:var(--text2)}.btn-g:hover{background:var(--bg3);color:var(--text1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-row{display:flex;gap:8px}
+
+.mini{height:60px;margin-bottom:12px}
+.chart-h{height:200px}
+
+.sec-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:0 12px 10px;border-bottom:1px solid var(--border)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);vertical-align:middle}
+.tbl tr:last-child td{border:none}
+.tbl tr:hover td{background:rgba(255,255,255,0.02)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:11px}
+.c-green{color:var(--green)}.c-red{color:var(--red)}.c-accent{color:var(--accent)}.c-amber{color:var(--amber)}.c-0{color:var(--text0);font-weight:500}
+
+.dev-name{font-size:12px;font-weight:600;color:var(--text0)}
+.dev-ip{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:1px}
+.edit-btn{background:none;border:none;cursor:pointer;color:var(--text4);padding:3px;border-radius:4px;transition:color .15s;display:inline-flex;align-items:center;margin-left:4px}
+.edit-btn:hover{color:var(--accent)}
+.edit-btn svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.name-inp{background:var(--bg2);border:1px solid var(--accent);border-radius:5px;color:var(--text0);padding:3px 7px;outline:none;font-size:12px;font-family:inherit;width:140px}
+
+.log-wrap{overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8}
+.log-row{display:flex;gap:12px;padding:1px 0}
+.log-ts{color:var(--text4);min-width:72px;flex-shrink:0}
+.log-msg{color:var(--text3)}
+.log-msg.ok{color:var(--green)}.log-msg.warn{color:var(--amber)}.log-msg.err{color:var(--red)}.log-msg.info{color:#818cf8}
+
+.empty{text-align:center;padding:32px;color:var(--text3);font-size:12px}
+.check-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg2);border-radius:var(--r);margin-bottom:6px;font-size:12px;color:var(--text2)}
+
+@media(max-width:900px){.sidebar{display:none}.g5{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.g2,.g3,.g4,.g5{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="lbox">
+    <div class="lhead">
+      <div class="licon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <div><div class="lname">CloudVPN</div><div class="lsub">Control Center</div></div>
+    </div>
+    <label class="llabel">Password</label>
+    <input class="linput" type="password" id="lpw" placeholder="Enter password" autocomplete="current-password"/>
+    <button class="lbtn" id="lbtn">Sign In</button>
+    <div class="lerr" id="lerr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="tb-brand">
+      <div class="tb-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <span class="tb-name">CloudVPN</span>
+      <div class="tb-sep"></div>
+      <span class="tb-sub" id="tbSub">Control Center</span>
+    </div>
+    <div class="tb-right">
+      <div class="tb-live"><span class="tb-dot"></span>Live</div>
+      <div class="tb-clock" id="clock">--:--:--</div>
+      <button class="tb-btn" id="soBtn">Sign out</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="sb-sec">
+        <div class="sb-lbl">Overview</div>
+        <div class="sb-item active" data-page="dashboard">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </div>
+        <div class="sb-item" data-page="servers">
+          <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          Servers
+          <span class="sb-badge" id="sbSrv">2</span>
+        </div>
+        <div class="sb-item" data-page="devices">
+          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          Devices
+          <span class="sb-badge" id="sbDev">—</span>
+        </div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec">
+        <div class="sb-lbl">Analytics</div>
+        <div class="sb-item" data-page="bandwidth">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Bandwidth
+        </div>
+        <div class="sb-item" data-page="pihole">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          Ad Blocking
+        </div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec">
+        <div class="sb-lbl">System</div>
+        <div class="sb-item" data-page="security">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Security
+        </div>
+        <div class="sb-item" data-page="log">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Event Log
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="g5">
+          <div class="stat"><div class="stat-lbl">Servers</div><div class="stat-val" id="ovSrv">—</div><div class="stat-foot" id="ovSrvOnline">—</div></div>
+          <div class="stat"><div class="stat-lbl">Active Peers</div><div class="stat-val" id="ovPeers">—</div><div class="stat-foot">all regions</div></div>
+          <div class="stat"><div class="stat-lbl">Total Traffic</div><div class="stat-val" id="ovTraffic" style="font-size:18px;padding-top:4px">—</div><div class="stat-foot">RX + TX</div></div>
+          <div class="stat"><div class="stat-lbl">Ads Blocked</div><div class="stat-val" id="ovBlocked">—</div><div class="stat-foot" id="ovBlockedPct">—</div></div>
+          <div class="stat"><div class="stat-lbl">IPs Banned</div><div class="stat-val" id="ovBanned">—</div><div class="stat-foot">Fail2Ban</div></div>
+        </div>
+        <div class="sec-title">Servers</div>
+        <div class="g2" id="dashSrvGrid"></div>
+        <div class="sec-title">Recent Events</div>
+        <div class="card"><div class="log-wrap" id="dashLog" style="height:160px"></div></div>
+      </div>
+
+      <!-- SERVERS -->
+      <div class="page" id="page-servers">
+        <div class="sec-title">All Servers</div>
+        <div class="g2" id="srvGrid"></div>
+      </div>
+
+      <!-- DEVICES -->
+      <div class="page" id="page-devices">
+        <div class="sec-title">Connected Devices</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="tbl">
+            <thead><tr>
+              <th style="padding-left:18px">Device</th><th>Server</th><th>Status</th>
+              <th>Last Handshake</th><th>↓ Received</th><th>↑ Sent</th>
+            </tr></thead>
+            <tbody id="devBody"><tr><td colspan="6" class="empty">No devices</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BANDWIDTH -->
+      <div class="page" id="page-bandwidth">
+        <div class="sec-title">Network Bandwidth</div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live throughput</div>
+            <div style="display:flex;gap:14px;font-size:11px;color:var(--text3)">
+              <span><span style="display:inline-block;width:10px;height:2px;background:var(--green);vertical-align:middle;margin-right:4px;border-radius:1px"></span>Download</span>
+              <span><span style="display:inline-block;width:10px;height:2px;background:#818cf8;vertical-align:middle;margin-right:4px;border-radius:1px"></span>Upload</span>
+            </div>
+          </div>
+          <div style="height:200px"><canvas id="bwChart"></canvas></div>
+          <div class="g4" style="margin-top:14px">
+            <div class="sm"><div class="sm-lbl">Current ↓</div><div class="sm-val c-green" id="bwCrx">—</div></div>
+            <div class="sm"><div class="sm-lbl">Current ↑</div><div class="sm-val c-accent" id="bwCtx">—</div></div>
+            <div class="sm"><div class="sm-lbl">Peak ↓</div><div class="sm-val c-amber" id="bwPrx">—</div></div>
+            <div class="sm"><div class="sm-lbl">Peak ↑</div><div class="sm-val c-amber" id="bwPtx">—</div></div>
+          </div>
+        </div>
+        <div class="sec-title">Usage vs Free Tier</div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-head"><div class="card-title">Canada — Google Cloud</div><span class="card-sub">200 GB/mo free</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:6px"><span>Used</span><span id="caUsed" class="mono">—</span></div>
+            <div class="res-track" style="height:6px;margin-bottom:6px"><div class="res-fill" id="caBar" style="width:0%;background:var(--accent)"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:12px"><span id="caPct">—</span>% of 200 GB used</div>
+            <div style="font-size:11px;color:var(--text3);line-height:2">
+              <div style="display:flex;justify-content:space-between"><span>Received</span><span id="caRx" class="mono c-green">—</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Sent</span><span id="caTx" class="mono c-accent">—</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">India — AWS EC2</div><span class="card-sub">100 GB/mo free</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:6px"><span>Used</span><span id="inUsed" class="mono">—</span></div>
+            <div class="res-track" style="height:6px;margin-bottom:6px"><div class="res-fill" id="inBar" style="width:0%;background:var(--amber)"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:12px"><span id="inPct">—</span>% of 100 GB used</div>
+            <div style="font-size:11px;color:var(--text3);line-height:2">
+              <div style="display:flex;justify-content:space-between"><span>Received</span><span id="inRx" class="mono c-green">—</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Sent</span><span id="inTx" class="mono c-accent">—</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AD BLOCKING -->
+      <div class="page" id="page-pihole">
+        <div class="sec-title">Pi-hole DNS Blocking</div>
+        <div class="g4">
+          <div class="stat"><div class="stat-lbl">Total Queries</div><div class="stat-val c-accent" id="phTotal">—</div><div class="stat-foot">today</div></div>
+          <div class="stat"><div class="stat-lbl">Blocked</div><div class="stat-val c-red" id="phBlocked">—</div><div class="stat-foot" id="phPct">—%</div></div>
+          <div class="stat"><div class="stat-lbl">Block List</div><div class="stat-val" style="font-size:16px;padding-top:4px">554K+</div><div class="stat-foot">domains</div></div>
+          <div class="stat"><div class="stat-lbl">Upstream DNS</div><div class="stat-val c-green" style="font-size:13px;padding-top:7px">Cloudflare</div><div class="stat-foot">1.1.1.1 DNSSEC</div></div>
+        </div>
+        <div class="g2">
+          <div class="card"><div class="card-head"><div class="card-title">Top Blocked Domains</div></div><div id="phBL"><div class="empty">No data yet</div></div></div>
+          <div class="card"><div class="card-head"><div class="card-title">Top Allowed Domains</div></div><div id="phAL"><div class="empty">No data yet</div></div></div>
+        </div>
+      </div>
+
+      <!-- SECURITY -->
+      <div class="page" id="page-security">
+        <div class="sec-title">Security Status</div>
+        <div class="g3">
+          <div class="stat"><div class="stat-lbl">SSH Attempts</div><div class="stat-val c-amber" id="secAtt">—</div><div class="stat-foot">failed logins</div></div>
+          <div class="stat"><div class="stat-lbl">IPs Banned</div><div class="stat-val c-red" id="secBan">—</div><div class="stat-foot">permanent</div></div>
+          <div class="stat"><div class="stat-lbl">Firewall</div><div class="stat-val c-green" style="font-size:13px;padding-top:7px">Active</div><div class="stat-foot">UFW + Fail2Ban</div></div>
+        </div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-head"><div class="card-title">Security Checklist</div></div>
+            <div class="check-row">WireGuard encryption<span class="badge on"><span class="bdot"></span>Active</span></div>
+            <div class="check-row">Fail2Ban<span class="badge on"><span class="bdot"></span>Running</span></div>
+            <div class="check-row">UFW Firewall<span class="badge on"><span class="bdot"></span>Active</span></div>
+            <div class="check-row">SSH key-only auth<span class="badge on"><span class="bdot"></span>Enabled</span></div>
+            <div class="check-row">Pi-hole DNS blocking<span class="badge on"><span class="bdot"></span>Active</span></div>
+            <div class="check-row">Auto security updates<span class="badge on"><span class="bdot"></span>Enabled</span></div>
+            <div class="check-row">Dashboard IP restricted<span class="badge on"><span class="bdot"></span>Yes</span></div>
+            <div class="check-row">HTTPS (Cloudflare)<span class="badge unk"><span class="bdot"></span>Partial</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Banned IPs</div><span class="card-sub" id="banCount">0</span></div>
+            <div id="banList"><div class="empty">No banned IPs</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOG -->
+      <div class="page" id="page-log">
+        <div class="sec-title">Event Log</div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">All events</div><button class="btn btn-g" onclick="document.getElementById('fullLog').innerHTML=''">Clear</button></div>
+          <div class="log-wrap" id="fullLog" style="height:420px"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let token=sessionStorage.getItem('cvpn_t');
+let socket=null,bwChart=null;
+let pkRx=0,pkTx=0;
+const bwL=Array(40).fill(''),bwR=Array(40).fill(0),bwT=Array(40).fill(0);
+const mCharts={};
+let peerNames={};
+
+const fmt=b=>{if(!b||b===0)return'0 B';const k=1024,s=['B','KB','MB','GB','TB'];const i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+s[i];};
+const fmtBw=kb=>{if(!kb||kb<0.1)return'0 KB/s';if(kb<1024)return kb.toFixed(1)+' KB/s';return(kb/1024).toFixed(2)+' MB/s';};
+const qs=id=>document.getElementById(id);
+const setText=(id,v)=>{const el=qs(id);if(el)el.textContent=v;};
+
+function log(msg,type=''){
+  ['dashLog','fullLog'].forEach(id=>{
+    const el=qs(id);if(!el)return;
+    const d=document.createElement('div');d.className='log-row';
+    d.innerHTML=`<span class="log-ts">${new Date().toLocaleTimeString()}</span><span class="log-msg ${type}">${msg}</span>`;
+    el.insertBefore(d,el.firstChild);
+    if(el.children.length>100)el.removeChild(el.lastChild);
+  });
+}
+
+setInterval(()=>{const el=qs('clock');if(el)el.textContent=new Date().toLocaleTimeString();},1000);
+
+document.querySelectorAll('.sb-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.sb-item').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    item.classList.add('active');
+    const pg=qs('page-'+item.dataset.page);
+    if(pg)pg.classList.add('active');
+  });
+});
+
+async function doLogin(){
+  const pw=qs('lpw').value,err=qs('lerr');err.textContent='';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    const d=await r.json();
+    if(!r.ok){err.textContent=d.error||'Invalid password';return;}
+    token=d.token;sessionStorage.setItem('cvpn_t',token);await showApp();
+  }catch(e){err.textContent='Connection error';}
+}
+
+async function doLogout(){
+  try{await fetch('/api/logout',{method:'POST',headers:{'x-session-token':token}});}catch(e){}
+  sessionStorage.removeItem('cvpn_t');token=null;
+  if(socket)socket.disconnect();
+  qs('app').style.display='none';
+  qs('login').style.display='flex';
+  qs('lpw').value='';
+}
+
+async function loadNames(){
+  try{
+    const r=await fetch('/api/peer-names',{headers:{'x-session-token':token}});
+    if(r.ok)Object.assign(peerNames,await r.json());
+  }catch(e){}
+  if(!Object.keys(peerNames).length){
+    Object.assign(peerNames,{'10.66.66.2':'Device 1','10.66.66.3':'My Laptop','10.66.66.4':'My iPhone','10.66.66.5':'My MacBook'});
+  }
+}
+
+function initBwChart(){
+  const ctx=qs('bwChart').getContext('2d');
+  bwChart=new Chart(ctx,{type:'line',data:{labels:bwL,datasets:[
+    {label:'Download',data:bwR,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.06)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true},
+    {label:'Upload',data:bwT,borderColor:'#818cf8',backgroundColor:'rgba(129,140,248,0.04)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true}
+  ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'#18181e',titleColor:'#e4e4f0',bodyColor:'#9898b8',borderColor:'rgba(255,255,255,0.07)',borderWidth:1,padding:10,callbacks:{label:c=>` ${c.dataset.label}: ${fmtBw(c.parsed.y)}`}}},
+    scales:{x:{ticks:{color:'#35354a',font:{size:9},maxTicksLimit:8},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#55556a',font:{size:9},callback:v=>fmtBw(v)},grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true,suggestedMax:5}}}});
+}
+
+async function showApp(){
+  qs('login').style.display='none';
+  const app=qs('app');app.style.display='flex';
+  // ensure dashboard page is active
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  qs('page-dashboard').classList.add('active');
+  await loadNames();
+  initBwChart();
+  connectSocket();
+  log('Authenticated','ok');
+}
+
+function connectSocket(){
+  socket=io({auth:{token},transports:['polling','websocket']});
+  socket.on('connect',()=>log('Connected','ok'));
+  socket.on('disconnect',()=>log('Disconnected','warn'));
+  socket.on('connect_error',()=>{log('Auth failed','err');doLogout();});
+  socket.on('servers',render);
+}
+
+async function ctrlServer(id,action,name){
+  log(`${action==='on'?'Starting':'Stopping'} ${name}...`,'info');
+  try{
+    const r=await fetch(`/api/server/${id}/${action}`,{method:'POST',headers:{'x-session-token':token}});
+    const d=await r.json();
+    log(`${name}: ${d.status==='on'?'started':'stopped'}`,d.status==='on'?'ok':'warn');
+  }catch(e){log(e.message,'err');}
+}
+
+function makeNameCell(ip){
+  const name=peerNames[ip]||ip;
+  const wrap=document.createElement('div');
+  const nameDiv=document.createElement('div');nameDiv.className='dev-name';nameDiv.textContent=name;
+  const ipDiv=document.createElement('div');ipDiv.className='dev-ip';ipDiv.textContent=ip;
+  const btn=document.createElement('button');btn.className='edit-btn';btn.title='Rename';
+  btn.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  btn.onclick=()=>{
+    const inp=document.createElement('input');inp.className='name-inp';inp.value=name;
+    wrap.innerHTML='';wrap.appendChild(inp);inp.focus();inp.select();
+    const save=async()=>{
+      const n=inp.value.trim();
+      if(n&&n!==name){
+        peerNames[ip]=n;nameDiv.textContent=n;
+        try{await fetch('/api/peer-name',{method:'POST',headers:{'Content-Type':'application/json','x-session-token':token},body:JSON.stringify({ip,name:n})});log(`Renamed ${ip} → "${n}"`,'info');}
+        catch(e){log('Rename failed','err');}
+      }
+      wrap.innerHTML='';wrap.appendChild(nameDiv);wrap.appendChild(ipDiv);wrap.appendChild(btn);
+    };
+    inp.onblur=save;
+    inp.onkeydown=e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){wrap.innerHTML='';wrap.appendChild(nameDiv);wrap.appendChild(ipDiv);wrap.appendChild(btn);}};
+  };
+  wrap.appendChild(nameDiv);wrap.appendChild(ipDiv);wrap.appendChild(btn);
+  return wrap;
+}
+
+function buildServerCard(srv,prefix){
+  const id=prefix+'-'+srv.id;
+  let card=qs(id);
+  if(!card){
+    card=document.createElement('div');card.id=id;card.className='srv';
+    card.innerHTML=`
+      <div class="srv-head">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="srv-flag">${srv.flag||'🖥️'}</div>
+          <div><div class="srv-name">${srv.name}</div><div class="srv-meta">${srv.country||''}</div></div>
+        </div>
+        <div id="${id}-badge"></div>
+      </div>
+      <div class="mini"><canvas id="${id}-mc"></canvas></div>
+      <div class="srv-metrics">
+        <div class="sm"><div class="sm-lbl">Peers</div><div class="sm-val" id="${id}-peers">—</div></div>
+        <div class="sm"><div class="sm-lbl">↓ RX</div><div class="sm-val c-green" id="${id}-rx">—</div></div>
+        <div class="sm"><div class="sm-lbl">↑ TX</div><div class="sm-val c-accent" id="${id}-tx">—</div></div>
+      </div>
+      <div class="res-list" id="${id}-res"></div>
+      <div class="btn-row">
+        <button class="btn btn-p" id="${id}-start">Start VPN</button>
+        <button class="btn btn-d" id="${id}-stop">Stop</button>
+      </div>`;
+
+    // find correct container
+    const container=prefix==='dash'?qs('dashSrvGrid'):qs('srvGrid');
+    if(container)container.appendChild(card);
+
+    qs(`${id}-start`).onclick=()=>ctrlServer(srv.id,'on',srv.name);
+    qs(`${id}-stop`).onclick=()=>ctrlServer(srv.id,'off',srv.name);
+
+    // mini chart
+    const mctx=qs(`${id}-mc`).getContext('2d');
+    mCharts[id]=new Chart(mctx,{type:'line',data:{labels:Array(40).fill(''),datasets:[
+      {data:Array(40).fill(0),borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.06)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true},
+      {data:Array(40).fill(0),borderColor:'#22c55e',backgroundColor:'transparent',borderWidth:1,pointRadius:0,tension:0.4}
+    ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false,beginAtZero:true,suggestedMax:5}}}});
+  }
+
+  const st=srv.stats||{};
+  const isOn=st.reachable&&st.wgStatus==='on';
+
+  // badge
+  const badge=qs(`${id}-badge`);
+  if(!st.reachable)badge.innerHTML='<span class="badge unk"><span class="bdot"></span>Unreachable</span>';
+  else if(isOn)badge.innerHTML='<span class="badge on"><span class="bdot"></span>Online</span>';
+  else badge.innerHTML='<span class="badge off"><span class="bdot"></span>Offline</span>';
+
+  setText(`${id}-peers`,(st.activePeers||0)+'/'+(st.totalPeers||0));
+  setText(`${id}-rx`,fmt(st.totalRx||0));
+  setText(`${id}-tx`,fmt(st.totalTx||0));
+  const sb=qs(`${id}-start`),stb=qs(`${id}-stop`);
+  if(sb)sb.disabled=isOn;if(stb)stb.disabled=!isOn;
+
+  // resources
+  const resEl=qs(`${id}-res`);
+  if(resEl){
+    if(st.cpu!==undefined&&!st.remote){
+      resEl.innerHTML=`
+        <div class="res-row"><span class="res-lbl">CPU</span><div class="res-track"><div class="res-fill" style="width:${Math.min(st.cpu,100)}%;background:${st.cpu>85?'var(--red)':st.cpu>65?'var(--amber)':'var(--accent)'}"></div></div><span class="res-val">${st.cpu.toFixed(0)}%</span></div>
+        <div class="res-row"><span class="res-lbl">RAM</span><div class="res-track"><div class="res-fill" style="width:${Math.min(st.mem,100)}%;background:var(--green)"></div></div><span class="res-val">${st.memUsed||'—'}M</span></div>
+        <div class="res-row"><span class="res-lbl">Disk</span><div class="res-track"><div class="res-fill" style="width:${Math.min(st.disk,100)}%;background:${st.disk>85?'var(--red)':st.disk>70?'var(--amber)':'#818cf8'}"></div></div><span class="res-val">${st.disk||'—'}%</span></div>`;
+    }else if(st.remote){
+      resEl.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 0">Remote · API control only</div>';
+    }
+  }
+
+  // mini chart update
+  if(mCharts[id]&&srv.history){
+    const c=mCharts[id];
+    c.data.datasets[0].data=srv.history.map(p=>p.rx);
+    c.data.datasets[1].data=srv.history.map(p=>p.tx);
+    const mx=Math.max(...srv.history.map(p=>Math.max(p.rx,p.tx)),1);
+    c.options.scales.y.suggestedMax=mx*1.3;
+    c.update('none');
+  }
+}
+
+function render(servers){
+  const online=servers.filter(s=>s.stats?.reachable&&s.stats?.wgStatus==='on').length;
+  let totalPeers=0,totalRx=0,totalTx=0,totalBw=0;
+  servers.forEach(s=>{
+    totalPeers+=(s.stats?.activePeers||0);
+    totalRx+=(s.stats?.totalRx||0);
+    totalTx+=(s.stats?.totalTx||0);
+    totalBw+=(s.bandwidth?.rx||0)+(s.bandwidth?.tx||0);
+  });
+
+  setText('ovSrv',servers.length);
+  setText('ovSrvOnline',online+' online');
+  setText('ovPeers',totalPeers);
+  setText('ovTraffic',fmt(totalRx+totalTx));
+  setText('sbSrv',servers.length);
+  setText('sbDev',totalPeers);
+  setText('tbSub',servers.length+' regions · '+online+' active');
+
+  // bw chart
+  const rxKb=Math.round(totalBw/2048*10)/10;
+  const txKb=Math.round(totalBw/2048*10)/10;
+  if(rxKb>pkRx)pkRx=rxKb;if(txKb>pkTx)pkTx=txKb;
+  bwR.shift();bwR.push(rxKb);bwT.shift();bwT.push(txKb);
+  bwL.shift();bwL.push(new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+  if(bwChart){const mx=Math.max(...bwR,...bwT,1);bwChart.options.scales.y.suggestedMax=mx*1.3;bwChart.update('none');}
+  setText('bwCrx',fmtBw(rxKb));setText('bwCtx',fmtBw(txKb));setText('bwPrx',fmtBw(pkRx));setText('bwPtx',fmtBw(pkTx));
+
+  // server cards — render in both dashboard and servers page with unique prefixes
+  servers.forEach(srv=>{
+    buildServerCard(srv,'dash');
+    buildServerCard(srv,'srv');
+  });
+
+  // per-server bandwidth
+  servers.forEach(s=>{
+    const rx=s.stats?.totalRx||0,tx=s.stats?.totalTx||0,total=rx+tx;
+    if(s.id==='canada'){
+      setText('caRx',fmt(rx));setText('caTx',fmt(tx));setText('caUsed',fmt(total));
+      const pct=Math.min((total/(200*1024*1024*1024))*100,100);
+      const b=qs('caBar');if(b)b.style.width=pct.toFixed(1)+'%';
+      setText('caPct',pct.toFixed(1));
+    }
+    if(s.id==='india'){
+      setText('inRx',fmt(rx));setText('inTx',fmt(tx));setText('inUsed',fmt(total));
+      const pct=Math.min((total/(100*1024*1024*1024))*100,100);
+      const b=qs('inBar');if(b)b.style.width=pct.toFixed(1)+'%';
+      setText('inPct',pct.toFixed(1));
+    }
+  });
+
+  // devices table
+  const allPeers=servers.flatMap(s=>(s.stats?.peers||[]).map(p=>({...p,sName:s.name,sFlag:s.flag})));
+  const devBody=qs('devBody');
+  if(devBody){
+    if(!allPeers.length){devBody.innerHTML='<tr><td colspan="6" class="empty">No devices connected</td></tr>';}
+    else{
+      devBody.innerHTML='';
+      allPeers.forEach(p=>{
+        const ip=(p.allowedIps||'').split('/')[0]||'';
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td style="padding-left:18px"></td>
+          <td><span class="mono">${p.sFlag} ${p.sName}</span></td>
+          <td><span class="badge ${p.isActive?'on':'off'}"><span class="bdot"></span>${p.isActive?'Active':'Idle'}</span></td>
+          <td><span class="mono">${p.secondsAgo?Math.floor(p.secondsAgo/60)+'m ago':'Never'}</span></td>
+          <td><span class="mono c-green">${fmt(p.rxBytes)}</span></td>
+          <td><span class="mono c-accent">${fmt(p.txBytes)}</span></td>`;
+        tr.cells[0].appendChild(makeNameCell(ip));
+        devBody.appendChild(tr);
+      });
+    }
+  }
+}
+
+qs('lbtn').addEventListener('click',doLogin);
+qs('lpw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+qs('soBtn').addEventListener('click',doLogout);
+
+if(token){
+  fetch('/api/servers',{headers:{'x-session-token':token}})
+    .then(r=>r.ok?showApp():doLogout())
+    .catch(()=>doLogout());
+}
+</script>
+</body>
+</html>

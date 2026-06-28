@@ -1,0 +1,22 @@
+[
+  {
+    "id": "canada",
+    "name": "Montreal",
+    "country": "Canada",
+    "flag": "🇨🇦",
+    "host": "localhost",
+    "apiPort": 3000,
+    "apiKey": "YOUR_CANADA_API_KEY",
+    "isLocal": true
+  },
+  {
+    "id": "india",
+    "name": "Mumbai",
+    "country": "India",
+    "flag": "🇮🇳",
+    "host": "YOUR_INDIA_SERVER_IP",
+    "apiPort": 3000,
+    "apiKey": "YOUR_INDIA_API_KEY",
+    "isLocal": false
+  }
+]
